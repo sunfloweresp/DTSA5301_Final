@@ -11,27 +11,33 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, echo = F}
+# Introduction
+```{r, echo = F, message= F}
 library(tidyverse)
 library(lubridate)
 NYPD_shooting_historic <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
-summary(NYPD_shooting_historic)
+#summary(NYPD_shooting_historic)
 ```
 Data is loaded in from the City of New York Website with the variables: incident key, occur date and time, borough it occurred in, the precinct, jurisdiction and location, whether it was a murder or not, the age group, sex and race of the perpetrator and victim.  
 
-```{r, echo = F}
+```{r, echo = F, message = F}
 #Clean up data, leaves only the columns occur date borough and adds a counter for the case
+NYPD_shooting_historic_cases <- NYPD_shooting_historic %>%
+  select(OCCUR_DATE, BORO, STATISTICAL_MURDER_FLAG)  %>%
+  mutate(date = mdy(OCCUR_DATE)) %>% 
+  select(-OCCUR_DATE) %>%
+  mutate(case = 1)
+
 NYPD_shooting_historic <- NYPD_shooting_historic %>%
-  select(OCCUR_DATE, BORO, VIC_SEX, PERP_SEX) 
-NYPD_shooting_historic <- NYPD_shooting_historic %>%
+  select(OCCUR_DATE, BORO, VIC_SEX, PERP_SEX) %>%
   mutate(date = mdy(OCCUR_DATE)) %>% 
   select(-OCCUR_DATE)
 
-summary(NYPD_shooting_historic)
+#summary(NYPD_shooting_historic)
 ```
 I will focus on the sex of the victim and perpetrator, I believe that sex (and gender which is not recorded) can have an influence on the dynamics of victims and perpetrators. I also want to examine how these change over time and borough. With 23568 reported shooting instances documented, the dates range from January 1st, 2006 to December 31st, 2020. There are 5 boroughs: the Bronx, Brooklyn, Manhattan, Queens, and Staten Island. There are three values for victim and perpetrator sex: Male, Female, U and NA (I will treat U and NA as the same).
 
-```{r, echo = F}
+```{r, echo = F, message = F}
 nas <- which(is.na(NYPD_shooting_historic$PERP_SEX))
 for(i in 1:length(nas)){
   NYPD_shooting_historic$PERP_SEX[nas[i]] <- "U"
@@ -43,12 +49,12 @@ Boro_totals <- NYPD_shooting_historic %>%
   select(BORO, Victim_Female, Victim_Male, Victim_Unknown, Perp_Female, Perp_Male, Perp_Unknown) %>%
   ungroup()
 
-summary(Boro_totals)
+#summary(Boro_totals)
 ```
 When separating by sex and borough, there are overwhelmingly more male than female victims in all boroughs. Similarly, when the sex of the perpetrator is known, there are more male perpetrators than female. 
 
-#Victim Sex Pie Chart by Borough
-```{r, echo = F}
+# Victim Sex Pie Chart by Borough
+```{r, echo = F, message = F}
 slices <- c(Boro_totals$Victim_Female[1], Boro_totals$Victim_Male[1], Boro_totals$Victim_Unknown[1])
 lbls <- c("Female", "Male", "Unknown")
 pie(slices, labels = lbls, main="Pie Chart of the Bronx Victim Sex")
@@ -70,8 +76,8 @@ lbls <- c("Female", "Male", "Unknown")
 pie(slices, labels = lbls, main="Pie Chart of Staten Island Victim Sex")
 ```
 
-#Perpetrator Sex Pie Chart by Borough
-```{r, echo = F}
+# Perpetrator Sex Pie Chart by Borough
+```{r, echo = F, message = F}
 slices <- c(Boro_totals$Perp_Female[1], Boro_totals$Perp_Male[1], Boro_totals$Perp_Unknown[1])
 lbls <- c("Female", "Male", "Unknown")
 pie(slices, labels = lbls, main="Pie Chart of the Bronx Perp Sex")
@@ -95,8 +101,43 @@ pie(slices, labels = lbls, main="Pie Chart of Staten Island Perp Sex")
 
 There are more male perpetrators than unknown sex perpetrators, and far fewer female perpetrators than unknown perpetrators. 
 
-# Predicting the {Perpetrator sex based on the borough and victim sex
-```{r, echo = F}
+```{r, echo = F, messages = F}
+Boro_totals_date <- NYPD_shooting_historic_cases %>%
+  group_by(BORO, date) %>%
+   summarise(murders = length(STATISTICAL_MURDER_FLAG == TRUE)) %>% 
+  select(date, BORO, murders) %>%
+  ungroup()
+
+
+borough <- "BRONX"
+Boro_totals_date %>%
+  filter(BORO == borough) %>% 
+  ggplot(aes(x = date, y = murders)) + geom_line(aes(color = BORO)) + labs(title = "NYPD Shooting Cases by Date in the Bronx")
+
+borough <- "BROOKLYN"
+Boro_totals_date %>%
+  filter(BORO == borough) %>% 
+  ggplot(aes(x = date, y = murders)) + geom_line(aes(color = BORO)) + labs(title = "NYPD Shooting Cases by Date in Brooklyn")
+
+borough <- "MANHATTAN"
+Boro_totals_date %>%
+  filter(BORO == borough) %>% 
+  ggplot(aes(x = date, y = murders)) + geom_line(aes(color = BORO)) + labs(title = "NYPD Shooting Cases by Date in Manhattan")
+
+borough <- "QUEENS"
+Boro_totals_date %>%
+  filter(BORO == borough) %>% 
+  ggplot(aes(x = date, y = murders)) + geom_line(aes(color = BORO)) + labs(title = "NYPD Shooting Cases by Date in Queens")
+
+borough <- "STATEN ISLAND"
+Boro_totals_date %>%
+  filter(BORO == borough) %>% 
+  ggplot(aes(x = date, y = murders)) + geom_line(aes(color = BORO)) + labs(title = "NYPD Shooting Cases by Date in Staten Island")
+```
+The Bronx and Brooklyn have the highest number of shooting incidents overall, and with this, they have the highest numbers of shootings that are classified as murders (19 in Brooklyn and the Bronx). There does not appear to an overall pattern in shootings overtime in any borough (either increasing, decreasing or changing throughout the year). Therefore, I will not create a model based on time for this data set.
+
+# Predicting the Perpetrator sex based on the borough and victim sex
+```{r, echo = F, message = F}
 vic_sex <- as.factor(NYPD_shooting_historic$VIC_SEX)
 vic_sex <- unclass(vic_sex)
 #vic sex F = 1, M = 2, U = 3
