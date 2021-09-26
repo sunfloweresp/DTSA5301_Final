@@ -1,0 +1,129 @@
+---
+title: "Week3_NYPD"
+author: "Elizabeth Polston"
+date: "9/5/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = F}
+library(tidyverse)
+library(lubridate)
+NYPD_shooting_historic <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+summary(NYPD_shooting_historic)
+```
+Data is loaded in from the City of New York Website with the variables: incident key, occur date and time, borough it occurred in, the precinct, jurisdiction and location, whether it was a murder or not, the age group, sex and race of the perpetrator and victim.  
+
+```{r, echo = F}
+#Clean up data, leaves only the columns occur date borough and adds a counter for the case
+NYPD_shooting_historic <- NYPD_shooting_historic %>%
+  select(OCCUR_DATE, BORO, VIC_SEX, PERP_SEX) 
+NYPD_shooting_historic <- NYPD_shooting_historic %>%
+  mutate(date = mdy(OCCUR_DATE)) %>% 
+  select(-OCCUR_DATE)
+
+summary(NYPD_shooting_historic)
+```
+I will focus on the sex of the victim and perpetrator, I believe that sex (and gender which is not recorded) can have an influence on the dynamics of victims and perpetrators. I also want to examine how these change over time and borough. With 23568 reported shooting instances documented, the dates range from January 1st, 2006 to December 31st, 2020. There are 5 boroughs: the Bronx, Brooklyn, Manhattan, Queens, and Staten Island. There are three values for victim and perpetrator sex: Male, Female, U and NA (I will treat U and NA as the same).
+
+```{r, echo = F}
+nas <- which(is.na(NYPD_shooting_historic$PERP_SEX))
+for(i in 1:length(nas)){
+  NYPD_shooting_historic$PERP_SEX[nas[i]] <- "U"
+}
+
+Boro_totals <- NYPD_shooting_historic %>%
+  group_by(BORO) %>%
+   summarise(Victim_Female = sum(VIC_SEX == "F"), Victim_Male = sum(VIC_SEX == "M"), Victim_Unknown = sum(VIC_SEX == "U"), Perp_Female = sum(PERP_SEX == "F"), Perp_Male = sum(PERP_SEX == "M"), Perp_Unknown = sum(PERP_SEX == "U")) %>% 
+  select(BORO, Victim_Female, Victim_Male, Victim_Unknown, Perp_Female, Perp_Male, Perp_Unknown) %>%
+  ungroup()
+
+summary(Boro_totals)
+```
+When separating by sex and borough, there are overwhelmingly more male than female victims in all boroughs. Similarly, when the sex of the perpetrator is known, there are more male perpetrators than female. 
+
+#Victim Sex Pie Chart by Borough
+```{r, echo = F}
+slices <- c(Boro_totals$Victim_Female[1], Boro_totals$Victim_Male[1], Boro_totals$Victim_Unknown[1])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of the Bronx Victim Sex")
+
+slices <- c(Boro_totals$Victim_Female[2], Boro_totals$Victim_Male[2], Boro_totals$Victim_Unknown[2])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Brooklyn Victim Sex")
+
+slices <- c(Boro_totals$Victim_Female[3], Boro_totals$Victim_Male[3], Boro_totals$Victim_Unknown[3])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Manhattan Victim Sex")
+
+slices <- c(Boro_totals$Victim_Female[4], Boro_totals$Victim_Male[4], Boro_totals$Victim_Unknown[4])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Queens Victim Sex")
+
+slices <- c(Boro_totals$Victim_Female[5], Boro_totals$Victim_Male[5], Boro_totals$Victim_Unknown[5])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Staten Island Victim Sex")
+```
+
+#Perpetrator Sex Pie Chart by Borough
+```{r, echo = F}
+slices <- c(Boro_totals$Perp_Female[1], Boro_totals$Perp_Male[1], Boro_totals$Perp_Unknown[1])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of the Bronx Perp Sex")
+
+slices <- c(Boro_totals$Perp_Female[2], Boro_totals$Perp_Male[2], Boro_totals$Perp_Unknown[2])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Brooklyn Perp Sex")
+
+slices <- c(Boro_totals$Perp_Female[3], Boro_totals$Perp_Male[3], Boro_totals$Perp_Unknown[3])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Manhattan Perp Sex")
+
+slices <- c(Boro_totals$Perp_Female[4], Boro_totals$Perp_Male[4], Boro_totals$Perp_Unknown[4])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Queens Perp Sex")
+
+slices <- c(Boro_totals$Perp_Female[5], Boro_totals$Perp_Male[5], Boro_totals$Perp_Unknown[5])
+lbls <- c("Female", "Male", "Unknown")
+pie(slices, labels = lbls, main="Pie Chart of Staten Island Perp Sex")
+```
+
+There are more male perpetrators than unknown sex perpetrators, and far fewer female perpetrators than unknown perpetrators. 
+
+# Predicting the {Perpetrator sex based on the borough and victim sex
+```{r, echo = F}
+vic_sex <- as.factor(NYPD_shooting_historic$VIC_SEX)
+vic_sex <- unclass(vic_sex)
+#vic sex F = 1, M = 2, U = 3
+
+perp_sex <- as.factor(NYPD_shooting_historic$PERP_SEX)
+perp_sex <- unclass(perp_sex)
+#perp sex F = 1, M = 2, U = 3
+
+boro <- as.factor(NYPD_shooting_historic$BORO)
+#boro <- unclass(boro)
+#boro BRONX = 1 BROOKLYN = 2 MANHATTAN = 3, QUEENS = 4, STATEN ISLAND = 5
+
+final <- data.frame(vic_sex, perp_sex, boro)
+
+
+model <- lm(final$perp_sex ~ final$boro + final$vic_sex)
+summary(model)
+
+final_pred <- final %>%
+  mutate(pred = predict(model))
+
+final_pred %>% 
+  ggplot() +
+  geom_point(aes(x = boro, y = perp_sex), color = "blue") +
+  geom_point(aes(x = boro, y = pred), color = "red") + xlab("Borough") + ylab("Perpetrator sex") + ggtitle(  "Prediction and Actual Perpetrator Sex by Borough")
+```
+The predicted sex of the perpetrator is between Male (with a value of 2) and Unknown (with a value of 3) when predicting based on victim sex and borough. The r squared value is relatively low, .015. Therefore, this is not a particularly informative model, rather the data overwhelmingly depict male and unknown sex for perpetrators.
+
+# Bias
+The author may hold biases from not having lived in cities and does not have knowledge about crime in cities. This was attempted by relying on the borough information to create averages of precincts contained.
